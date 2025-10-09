@@ -3,12 +3,32 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { FASTQC                    } from '../modules/nf-core/fastqc/main'
+include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
+include { paramsSummaryMap          } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText    } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { TRIMGALORE                } from '../modules/nf-core/trimgalore/main'
+include { HISAT2_ALIGN              } from '../modules/nf-core/hisat2/align/main'
+include { HISAT2_EXTRACTSPLICESITES } from '../modules/nf-core/hisat2/extractsplicesites/main'
+include { HISAT2_BUILD              } from '../modules/nf-core/hisat2/build/main'
+//include { featureCounts             } from '../modules/nf.core/subread/featurecounts/main'
+
+include { getGenomeAttribute      } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    GENOME PARAMETER VALUES
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+// TODO nf-core: Remove this line if you don't need a FASTA file
+//   This is an example of how to use getGenomeAttribute() to fetch parameters
+//   from igenomes.config using `--genome`
+params.fasta = getGenomeAttribute('fasta')
+params.gtf = getGenomeAttribute('gtf')
+
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,6 +63,71 @@ workflow LEONIECHRISSI {
             sort: true,
             newLine: true
         ).set { ch_collated_versions }
+
+    //
+    //MODULE: TRIMGALORE
+    //
+    TRIMGALORE(
+        ch_samplesheet
+    )
+
+    ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.zip.collect{it[1]})
+    //ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    //
+    // MODULE: HISAT2_EXTRACTSPLICESITES
+    //
+
+    path_fasta = getGenomeAttribute("fasta")
+    ch_fasta = Channel
+        .fromPath(path_fasta)
+        .map { fasta_file -> tuple(id:fasta_file.getSimpleName(), fasta_file) }
+
+    path_gtf = getGenomeAttribute("gtf")
+    ch_gtf = Channel
+        .fromPath(path_gtf)
+        .map { gtf_file -> tuple(id:gtf_file.getSimpleName(), gtf_file) }
+
+    HISAT2_EXTRACTSPLICESITES(ch_gtf)
+    ch_splicesites = HISAT2_EXTRACTSPLICESITES.out.txt
+
+    //
+    // MODULE: HISAT2_BUILT
+    //
+
+    HISAT2_BUILD(
+        fasta = ch_fasta,
+        gtf = ch_gtf,
+        splicesites = ch_splicesites
+    )
+      
+    //
+    // MODULE: HISAT2_ALIGN
+    //
+
+    ch_trimmed_reads = TRIMGALORE.out.reads
+    ch_ht2_file = HISAT2_BUILD.out.index
+
+    HISAT2_ALIGN(
+        ch_trimmed_reads,
+        ch_ht2_file.collect(),
+        ch_gtf
+    )
+
+    //
+    // MODULE: FeatureCounts
+    //
+
+    // ch_meta = HISAT2_ALIGN.out.bam.map { meta, bam -> meta }
+    // ch_bam  = HISAT2_ALIGN.out.bam.map { meta, bam -> bam }
+
+
+    // featureCounts(
+    //      ch_meta,
+    //      ch_bam
+    //      ch_gft
+    // )
+
 
 
     //
