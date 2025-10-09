@@ -13,7 +13,7 @@ include { TRIMGALORE                } from '../modules/nf-core/trimgalore/main'
 include { HISAT2_ALIGN              } from '../modules/nf-core/hisat2/align/main'
 include { HISAT2_EXTRACTSPLICESITES } from '../modules/nf-core/hisat2/extractsplicesites/main'
 include { HISAT2_BUILD              } from '../modules/nf-core/hisat2/build/main'
-//include { featureCounts             } from '../modules/nf.core/subread/featurecounts/main'
+include { SUBREAD_FEATURECOUNTS     } from '../modules/nf-core/subread/featurecounts/main'
 
 include { getGenomeAttribute      } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
 
@@ -88,7 +88,12 @@ workflow LEONIECHRISSI {
         .fromPath(path_gtf)
         .map { gtf_file -> tuple(id:gtf_file.getSimpleName(), gtf_file) }
 
+    ch_gtf.dump(tag:"gtf1")
+
     HISAT2_EXTRACTSPLICESITES(ch_gtf)
+
+    ch_gtf.dump(tag:"gtf2")
+
     ch_splicesites = HISAT2_EXTRACTSPLICESITES.out.txt
 
     //
@@ -100,6 +105,8 @@ workflow LEONIECHRISSI {
         gtf = ch_gtf,
         splicesites = ch_splicesites
     )
+
+    ch_gtf.dump(tag:"gtf3")
       
     //
     // MODULE: HISAT2_ALIGN
@@ -111,22 +118,22 @@ workflow LEONIECHRISSI {
     HISAT2_ALIGN(
         ch_trimmed_reads,
         ch_ht2_file.collect(),
-        ch_gtf
+        ch_splicesites.collect()
     )
 
     //
     // MODULE: FeatureCounts
     //
 
-    // ch_meta = HISAT2_ALIGN.out.bam.map { meta, bam -> meta }
-    // ch_bam  = HISAT2_ALIGN.out.bam.map { meta, bam -> bam }
+    ch_featurecount  = HISAT2_ALIGN.out.bam
+    ch_featurecount_in = ch_featurecount.merge(ch_gtf.collect{it[1]}).dump(tag:"gtf_inkl")
 
 
-    // featureCounts(
-    //      ch_meta,
-    //      ch_bam
-    //      ch_gft
-    // )
+    SUBREAD_FEATURECOUNTS(
+        ch_featurecount_in
+    )
+
+    ch_counts_out = SUBREAD_FEATURECOUNTS.out.counts
 
 
 
