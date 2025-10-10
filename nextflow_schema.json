@@ -226,6 +226,22 @@
                     "hidden": true
                 }
             }
+        },
+        "optional_parameters": {
+            "title": "Optional Parameters",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "hisat2_build_memory": {
+                    "type": "string",
+                    "default": "6.GB"
+                },
+                "seq_center": {
+                    "type": "string",
+                    "default": "unknown"
+                }
+            }
         }
     },
     "allOf": [
@@ -240,6 +256,9 @@
         },
         {
             "$ref": "#/$defs/generic_options"
+        },
+        {
+            "$ref": "#/$defs/optional_parameters"
         }
     ]
 }

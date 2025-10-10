@@ -27,11 +27,11 @@
                 "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
                 "errorMessage": "FastQ file for reads 2 cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
             },
-            "strand": {
+            "strandedness": {
                 "type": "string",
-                "enum": ["unstranded","forward","reverse"],
-                "default": "unstranded",
-                "meta": ["strand"]
+                "errorMessage": "Strandedness must be provided and be one of 'auto', 'forward', 'reverse' or 'unstranded'",
+                "enum": ["forward", "reverse", "unstranded", "auto"],
+                "meta": ["strandedness"]
             },
             "group": {
                 "type": "string",

@@ -50,7 +50,6 @@ workflow LEONIECHRISSI {
 
     // unique ids
     ch_samplesheet = ch_samplesheet.unique { meta -> meta.id }
-    ch_samplesheet.view()
 
 
     //
@@ -122,7 +121,7 @@ workflow LEONIECHRISSI {
     //
 
     ch_featurecount  = HISAT2_ALIGN.out.bam
-    ch_featurecount_in = ch_featurecount.merge(ch_gtf.collect{it[1]}).dump(tag:"gtf_inkl")
+    ch_featurecount_in = ch_featurecount.merge(ch_gtf.collect{it[1]})
 
 
     SUBREAD_FEATURECOUNTS(
