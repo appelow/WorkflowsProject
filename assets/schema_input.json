@@ -29,7 +29,7 @@
             },
             "strand": {
                 "type": "string",
-                "enum": ["unstranded", "forward", "reverse"],
+                "enum": ["unstranded","forward","reverse"],
                 "default": "unstranded",
                 "meta": ["strand"]
             },
@@ -46,6 +46,6 @@
                 "meta": ["replicate"]
             }
         },
-        "required": ["sample", "fastq_1", "strand", "group", "replicate"]
+        "required": ["sample", "fastq_1"]
     }
 }
