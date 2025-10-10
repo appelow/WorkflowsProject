@@ -12,7 +12,7 @@ output_file = sys.argv[2]
 files = glob.glob(os.path.join(input_folder, "*.tsv"))
 
 if not files:
-    sys.exit(f"❌ Keine TSV-Dateien in '{input_folder}' gefunden.")
+    sys.exit(f"Keine TSV-Dateien in '{input_folder}' gefunden.")
 
 dfs = []
 for f in files:

@@ -44,8 +44,15 @@ workflow LEONIECHRISSI {
     ch_samplesheet // channel: samplesheet read in from --input
     main:
 
+
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
+
+    // unique ids
+    ch_samplesheet = ch_samplesheet.unique { meta -> meta.id }
+    ch_samplesheet.view()
+
+
     //
     // MODULE: Run FastQC
     //
@@ -56,17 +63,6 @@ workflow LEONIECHRISSI {
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
 
     //
-    // Collate and save software versions
-    //
-    softwareVersionsToYAML(ch_versions)
-        .collectFile(
-            storeDir: "${params.outdir}/pipeline_info",
-            name: 'nf_core_'  +  'leoniechrissi_software_'  + 'mqc_'  + 'versions.yml',
-            sort: true,
-            newLine: true
-        ).set { ch_collated_versions }
-
-    //
     //MODULE: TRIMGALORE
     //
     TRIMGALORE(
@@ -74,7 +70,7 @@ workflow LEONIECHRISSI {
     )
 
     ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.zip.collect{it[1]})
-    //ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+    ch_versions = ch_versions.mix(TRIMGALORE.out.versions.first())
 
     //
     // MODULE: HISAT2_EXTRACTSPLICESITES
@@ -91,8 +87,8 @@ workflow LEONIECHRISSI {
         .map { gtf_file -> tuple(id:gtf_file.getSimpleName(), gtf_file) }
 
     HISAT2_EXTRACTSPLICESITES(ch_gtf)
-
     ch_splicesites = HISAT2_EXTRACTSPLICESITES.out.txt
+    ch_versions = ch_versions.mix(HISAT2_EXTRACTSPLICESITES.out.versions.first())
 
     //
     // MODULE: HISAT2_BUILT
@@ -103,19 +99,22 @@ workflow LEONIECHRISSI {
         gtf = ch_gtf,
         splicesites = ch_splicesites
     )
-      
+    ch_versions = ch_versions.mix(HISAT2_BUILD.out.versions.first())
+
     //
     // MODULE: HISAT2_ALIGN
     //
 
     ch_trimmed_reads = TRIMGALORE.out.reads
     ch_ht2_file = HISAT2_BUILD.out.index
+    
 
     HISAT2_ALIGN(
         ch_trimmed_reads,
         ch_ht2_file.collect(),
         ch_splicesites.collect()
     )
+    ch_versions = ch_versions.mix(HISAT2_ALIGN.out.versions.first())
 
     //
     // MODULE: FeatureCounts
@@ -128,16 +127,28 @@ workflow LEONIECHRISSI {
     SUBREAD_FEATURECOUNTS(
         ch_featurecount_in
     )
+    ch_versions = ch_versions.mix(SUBREAD_FEATURECOUNTS.out.versions.first())
+    //ch_files = SUBREAD_FEATURECOUNTS.out.counts
 
     //
     // MODULE: FEATURECOUNTS_MERGE (local)
     //
+
     FEATURECOUNTS_MERGE(
-        file('results/subread')
+        file("results/subread")
     )
 
 
-
+    //
+    // Collate and save software versions
+    //
+    softwareVersionsToYAML(ch_versions)
+        .collectFile(
+            storeDir: "${params.outdir}/pipeline_info",
+            name: 'nf_core_'  +  'leoniechrissi_software_'  + 'mqc_'  + 'versions.yml',
+            sort: true,
+            newLine: true
+        ).set { ch_collated_versions }
 
     //
     // MODULE: MultiQC
@@ -178,7 +189,6 @@ workflow LEONIECHRISSI {
         [],
         []
     )
-
     emit:multiqc_report = MULTIQC.out.report.toList() // channel: /path/to/multiqc_report.html
     versions       = ch_versions                 // channel: [ path(versions.yml) ]
 
