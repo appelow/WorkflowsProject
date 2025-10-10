@@ -69,7 +69,7 @@ workflow LEONIECHRISSI {
         ch_samplesheet
     )
 
-    ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.zip.collect{it[1]})
+    ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.log.collect{it[1]})
     ch_versions = ch_versions.mix(TRIMGALORE.out.versions.first())
 
     //
@@ -115,6 +115,7 @@ workflow LEONIECHRISSI {
         ch_splicesites.collect()
     )
     ch_versions = ch_versions.mix(HISAT2_ALIGN.out.versions.first())
+    ch_multiqc_files = ch_multiqc_files.mix(HISAT2_ALIGN.out.summary.collect{it[1]})
 
     //
     // MODULE: FeatureCounts
@@ -128,16 +129,15 @@ workflow LEONIECHRISSI {
         ch_featurecount_in
     )
     ch_versions = ch_versions.mix(SUBREAD_FEATURECOUNTS.out.versions.first())
-    //ch_files = SUBREAD_FEATURECOUNTS.out.counts
+    ch_multiqc_files = ch_multiqc_files.mix(SUBREAD_FEATURECOUNTS.out.summary.collect{it[1]})
 
-    //
-    // MODULE: FEATURECOUNTS_MERGE (local)
-    //
+    ch_files = SUBREAD_FEATURECOUNTS.out.counts.collect{it[1]}
 
+
+    // merge process
     FEATURECOUNTS_MERGE(
-        file("results/subread")
+        ch_files.collect()
     )
-
 
     //
     // Collate and save software versions

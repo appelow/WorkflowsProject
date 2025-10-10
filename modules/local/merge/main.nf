@@ -1,14 +1,15 @@
 process FEATURECOUNTS_MERGE {
-    tag "$input_folder"
+    tag "$count_files"
 
     input:
-    path input_folder
+    path count_files
 
     output:
     path "merged_counts.tsv", emit: counts
 
     script:
     """
-    python3 ${projectDir}/modules/local/merge/merge_counts.py ${input_folder} merged_counts.tsv
+    python3 ${projectDir}/modules/local/merge/merge_counts.py ${count_files.join(' ')} merged_counts.tsv
     """
+    // python3 ${projectDir}/modules/local/merge/merge_counts.py ${count_files} merged_counts.tsv
 }

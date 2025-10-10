@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 import pandas as pd
-import glob
 import os
 import sys
 
-# Argumente
-input_folder = sys.argv[1]
-output_file = sys.argv[2]
+# Input arguments: all except the last are input files, last is output file
+if len(sys.argv) < 3:
+    sys.exit("Usage: merge_counts.py <file1> <file2> ... <output_file>")
 
-# Alle TSV-Dateien finden
-files = glob.glob(os.path.join(input_folder, "*.tsv"))
-
-if not files:
-    sys.exit(f"Keine TSV-Dateien in '{input_folder}' gefunden.")
+files = sys.argv[1:-1]
+output_file = sys.argv[-1]
 
 dfs = []
 for f in files:
+    if not os.path.exists(f):
+        sys.exit(f"❌ Datei nicht gefunden: {f}")
     sample = os.path.basename(f).replace(".featureCounts.tsv", "")
     df = pd.read_csv(f, sep="\t", comment="#")
     if "Geneid" not in df.columns:
