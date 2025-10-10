@@ -15,6 +15,8 @@ include { HISAT2_EXTRACTSPLICESITES } from '../modules/nf-core/hisat2/extractspl
 include { HISAT2_BUILD              } from '../modules/nf-core/hisat2/build/main'
 include { SUBREAD_FEATURECOUNTS     } from '../modules/nf-core/subread/featurecounts/main'
 
+include { FEATURECOUNTS_MERGE       } from '../modules/local/merge/main'
+
 include { getGenomeAttribute      } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
 
 /*
@@ -88,11 +90,7 @@ workflow LEONIECHRISSI {
         .fromPath(path_gtf)
         .map { gtf_file -> tuple(id:gtf_file.getSimpleName(), gtf_file) }
 
-    ch_gtf.dump(tag:"gtf1")
-
     HISAT2_EXTRACTSPLICESITES(ch_gtf)
-
-    ch_gtf.dump(tag:"gtf2")
 
     ch_splicesites = HISAT2_EXTRACTSPLICESITES.out.txt
 
@@ -105,8 +103,6 @@ workflow LEONIECHRISSI {
         gtf = ch_gtf,
         splicesites = ch_splicesites
     )
-
-    ch_gtf.dump(tag:"gtf3")
       
     //
     // MODULE: HISAT2_ALIGN
@@ -133,7 +129,13 @@ workflow LEONIECHRISSI {
         ch_featurecount_in
     )
 
-    ch_counts_out = SUBREAD_FEATURECOUNTS.out.counts
+    //
+    // MODULE: FEATURECOUNTS_MERGE (local)
+    //
+    FEATURECOUNTS_MERGE(
+        file('results/subread')
+    )
+
 
 
 
