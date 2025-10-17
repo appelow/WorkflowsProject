@@ -5,6 +5,9 @@
 */
 include { FASTQC                    } from '../modules/nf-core/fastqc/main'
 include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
+include { PICARD_MARKDUPLICATES     } from '../modules/nf-core/picard/markduplicates/main'
+include { SAMTOOLS_FAIDX            } from '../modules/nf-core/samtools/faidx/main'
+include { SAMTOOLS_SORT            } from '../modules/nf-core/samtools/sort/main'
 include { paramsSummaryMap          } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -18,6 +21,7 @@ include { SUBREAD_FEATURECOUNTS     } from '../modules/nf-core/subread/featureco
 include { FEATURECOUNTS_MERGE       } from '../modules/local/merge/main'
 
 include { getGenomeAttribute      } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq_fastqc_umitools_trimgalore'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -51,25 +55,40 @@ workflow LEONIECHRISSI {
     // unique ids
     ch_samplesheet = ch_samplesheet.unique { meta -> meta.id }
 
+    // SUBWORKFLOW:
+    FASTQ_FASTQC_UMITOOLS_TRIMGALORE (
+        reads = ch_samplesheet,         // channel: [ val(meta), [ reads ] ]
+        skip_fastqc = false,            // boolean: true/false
+        with_umi = params.umi,          // boolean: true/false
+        skip_umi_extract = false,       // boolean: true/false
+        skip_trimming = false,          // boolean: true/false
+        umi_discard_read = 2,           // integer: 0, 1 or 2
+        min_trimmed_reads = 3           // integer: > 0 
+    )
+
+    //FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.versions.view()
+    ch_multiqc_files = ch_multiqc_files.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.fastqc_zip.collect{it[1]})
+    ch_multiqc_files = ch_multiqc_files.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.trim_log.collect{it[1]})
+    ch_versions = ch_versions.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.versions)
 
     //
     // MODULE: Run FastQC
     //
-    FASTQC (
-        ch_samplesheet
-    )
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+    // FASTQC (
+    //     ch_samplesheet
+    // )
+    // ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
+    // ch_versions = ch_versions.mix(FASTQC.out.versions.first())
 
-    //
+    // //
     //MODULE: TRIMGALORE
     //
-    TRIMGALORE(
-        ch_samplesheet
-    )
+    // TRIMGALORE(
+    //     ch_samplesheet
+    // )
 
-    ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.log.collect{it[1]})
-    ch_versions = ch_versions.mix(TRIMGALORE.out.versions.first())
+    // ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.log.collect{it[1]})
+    // ch_versions = ch_versions.mix(TRIMGALORE.out.versions.first())
 
     //
     // MODULE: HISAT2_EXTRACTSPLICESITES
@@ -91,7 +110,7 @@ workflow LEONIECHRISSI {
 
     //
     // MODULE: HISAT2_BUILT
-    //
+    // build index for reference genome
 
     HISAT2_BUILD(
         fasta = ch_fasta,
@@ -102,11 +121,11 @@ workflow LEONIECHRISSI {
 
     //
     // MODULE: HISAT2_ALIGN
-    //
+    // align reads to reference genome
 
-    ch_trimmed_reads = TRIMGALORE.out.reads
+    //prepare for hisat2_align
+    ch_trimmed_reads = FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads
     ch_ht2_file = HISAT2_BUILD.out.index
-    
 
     HISAT2_ALIGN(
         ch_trimmed_reads,
@@ -116,24 +135,81 @@ workflow LEONIECHRISSI {
     ch_versions = ch_versions.mix(HISAT2_ALIGN.out.versions.first())
     ch_multiqc_files = ch_multiqc_files.mix(HISAT2_ALIGN.out.summary.collect{it[1]})
 
+    // 
+    // MODULE: samtools/faidx
+    // get correct file format for the reference genome
+    // 
+    SAMTOOLS_FAIDX (
+        ch_fasta,
+        [[],[]],
+        false
+    )
+    ch_versions = ch_versions.mix(SAMTOOLS_FAIDX.out.versions.first())
+
+    // 
+    // MODULE: samtools sort
+    // sort in preperation for Markduplicates
+    //
+
+    // prepare for samtools sort
+    bam_files = HISAT2_ALIGN.out.bam
+    bam_files_sorted = bam_files.map { meta, bam ->
+    meta_new = meta.clone()
+    meta_new.id = "${meta.id}.sorted"
+    tuple(meta_new, bam)
+    }
+
+    SAMTOOLS_SORT(
+        bam_files_sorted,
+        ch_fasta.collect(),
+        []
+    )
+    ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions.first())
+
+    //  
+    // MODULE: Markduplicates
+    //
+    
+    // prepare for Markduplicates
+    sort_bam = SAMTOOLS_SORT.out.bam
+    bam_files_with_prefix = sort_bam.map { meta, bam ->
+    meta.id = "${meta.id}.markdup"
+    tuple(meta, bam)
+    }
+    fai_genome = SAMTOOLS_FAIDX.out.fai
+
+    PICARD_MARKDUPLICATES(
+        bam_files_with_prefix,
+        ch_fasta.collect(),
+        fai_genome.collect()
+    )
+   
+    ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions.first())
+    ch_multiqc_files = ch_multiqc_files.mix(PICARD_MARKDUPLICATES.out.metrics.collect{it[1]})
+
     //
     // MODULE: FeatureCounts
     //
 
-    ch_featurecount  = HISAT2_ALIGN.out.bam
+    // prepare for FeatureCounts
+    ch_featurecount  = PICARD_MARKDUPLICATES.out.bam
     ch_featurecount_in = ch_featurecount.merge(ch_gtf.collect{it[1]})
 
 
     SUBREAD_FEATURECOUNTS(
         ch_featurecount_in
     )
+
     ch_versions = ch_versions.mix(SUBREAD_FEATURECOUNTS.out.versions.first())
     ch_multiqc_files = ch_multiqc_files.mix(SUBREAD_FEATURECOUNTS.out.summary.collect{it[1]})
 
-    ch_files = SUBREAD_FEATURECOUNTS.out.counts.collect{it[1]}
+   
 
-
+    //
+    // MODULE: featurecounts merge
     // merge process
+    
+    ch_files = SUBREAD_FEATURECOUNTS.out.counts.collect{it[1]}
     FEATURECOUNTS_MERGE(
         ch_files.collect()
     )

@@ -9,6 +9,17 @@ report_section_order:
     order: -1001
   "nf-core-leoniechrissi-summary":
     order: -1002
+  
+  FastQC:
+    order: 1
+  Cutadapt:
+    order: 2
+  "Bowtie 2 / HiSAT2":
+    order: 3
+  Picard:
+    order: 4
+  featureCounts:
+    order: 5
 
 export_plots: true
 
