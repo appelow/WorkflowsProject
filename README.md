@@ -34,7 +34,7 @@ The pipeline outputs a merged count table and a comprehensive MultiQC report sum
 5. **Alignment** with splice-aware mapping([`HISAT2`](https://daehwankimlab.github.io/hisat2/manual/))  
 6. **BAM processing** for sorting and indexing ([`SAMtools`](https://www.htslib.org/)) 
 7. **Duplicate marking** ([`Picard MarkDuplicates`](https://broadinstitute.github.io/picard/))
-8. **Feature counting**for gene-level quantification  ([`Subread FeatureCounts`]) (https://pubmed.ncbi.nlm.nih.gov/24227677/)
+8. **Feature counting**for gene-level quantification  ([`Subread FeatureCounts`] (https://pubmed.ncbi.nlm.nih.gov/24227677/))
 9. **Result aggregation** for summarizing all reports into one interactive HTML output ([`MultiQC`](https://multiqc.info/))
 
 
