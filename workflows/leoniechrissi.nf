@@ -7,21 +7,22 @@ include { FASTQC                    } from '../modules/nf-core/fastqc/main'
 include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
 include { PICARD_MARKDUPLICATES     } from '../modules/nf-core/picard/markduplicates/main'
 include { SAMTOOLS_FAIDX            } from '../modules/nf-core/samtools/faidx/main'
-include { SAMTOOLS_SORT            } from '../modules/nf-core/samtools/sort/main'
-include { paramsSummaryMap          } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText    } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { SAMTOOLS_SORT             } from '../modules/nf-core/samtools/sort/main'
 include { TRIMGALORE                } from '../modules/nf-core/trimgalore/main'
 include { HISAT2_ALIGN              } from '../modules/nf-core/hisat2/align/main'
 include { HISAT2_EXTRACTSPLICESITES } from '../modules/nf-core/hisat2/extractsplicesites/main'
 include { HISAT2_BUILD              } from '../modules/nf-core/hisat2/build/main'
 include { SUBREAD_FEATURECOUNTS     } from '../modules/nf-core/subread/featurecounts/main'
 
-include { FEATURECOUNTS_MERGE       } from '../modules/local/merge/main'
+include { FEATURECOUNTS_MERGE } from '../modules/local/merge/main'
 
-include { getGenomeAttribute      } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { paramsSummaryMap } from 'plugin/nf-schema'
+
+include { paramsSummaryMultiqc             } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML           } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq_fastqc_umitools_trimgalore'
+include { methodsDescriptionText           } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
+include { getGenomeAttribute               } from '../subworkflows/local/utils_nfcore_leoniechrissi_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -29,12 +30,8 @@ include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-// TODO nf-core: Remove this line if you don't need a FASTA file
-//   This is an example of how to use getGenomeAttribute() to fetch parameters
-//   from igenomes.config using `--genome`
 params.fasta = getGenomeAttribute('fasta')
 params.gtf = getGenomeAttribute('gtf')
-
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -45,60 +42,40 @@ params.gtf = getGenomeAttribute('gtf')
 workflow LEONIECHRISSI {
 
     take:
-    ch_samplesheet // channel: samplesheet read in from --input
+    // channel: samplesheet read in from --input
+    ch_samplesheet 
+
     main:
-
-
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
 
     // unique ids
     ch_samplesheet = ch_samplesheet.unique { meta -> meta.id }
 
-    // SUBWORKFLOW:
+    //
+    // SUBWORKFLOW: fastqc, umnitools, trimgalore
+    //
+
     FASTQ_FASTQC_UMITOOLS_TRIMGALORE (
-        reads = ch_samplesheet,         // channel: [ val(meta), [ reads ] ]
-        skip_fastqc = false,            // boolean: true/false
-        with_umi = params.umi,          // boolean: true/false
-        skip_umi_extract = false,       // boolean: true/false
-        skip_trimming = false,          // boolean: true/false
-        umi_discard_read = 2,           // integer: 0, 1 or 2
-        min_trimmed_reads = 3           // integer: > 0 
+        ch_samplesheet,         // reads
+        false,                  // skip_fastqc
+        params.umi,             // with_umi
+        false,                  // skip_umi_extract
+        false,                  // skip_trimming
+        2,                      // umi_discard_read
+        3                       // min_trimmed_reads
     )
 
-    //FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.versions.view()
     ch_multiqc_files = ch_multiqc_files.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.fastqc_zip.collect{it[1]})
     ch_multiqc_files = ch_multiqc_files.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.trim_log.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.versions)
 
     //
-    // MODULE: Run FastQC
-    //
-    // FASTQC (
-    //     ch_samplesheet
-    // )
-    // ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-    // ch_versions = ch_versions.mix(FASTQC.out.versions.first())
-
-    // //
-    //MODULE: TRIMGALORE
-    //
-    // TRIMGALORE(
-    //     ch_samplesheet
-    // )
-
-    // ch_multiqc_files = ch_multiqc_files.mix(TRIMGALORE.out.log.collect{it[1]})
-    // ch_versions = ch_versions.mix(TRIMGALORE.out.versions.first())
-
-    //
     // MODULE: HISAT2_EXTRACTSPLICESITES
+    // extracts splice sites
     //
 
-    path_fasta = getGenomeAttribute("fasta")
-    ch_fasta = Channel
-        .fromPath(path_fasta)
-        .map { fasta_file -> tuple(id:fasta_file.getSimpleName(), fasta_file) }
-
+    // preparare for extract splice sites
     path_gtf = getGenomeAttribute("gtf")
     ch_gtf = Channel
         .fromPath(path_gtf)
@@ -111,26 +88,35 @@ workflow LEONIECHRISSI {
     //
     // MODULE: HISAT2_BUILT
     // build index for reference genome
+    //
+
+    // prepare for hisat2 build
+    path_fasta = getGenomeAttribute("fasta")
+    ch_fasta = Channel
+        .fromPath(path_fasta)
+        .map { fasta_file -> tuple(id:fasta_file.getSimpleName(), fasta_file) }
+
 
     HISAT2_BUILD(
-        fasta = ch_fasta,
-        gtf = ch_gtf,
-        splicesites = ch_splicesites
+        ch_fasta,           // fasta
+        ch_gtf,             // gtf
+        ch_splicesites      // splicesites
     )
     ch_versions = ch_versions.mix(HISAT2_BUILD.out.versions.first())
 
     //
     // MODULE: HISAT2_ALIGN
     // align reads to reference genome
+    //
 
     //prepare for hisat2_align
     ch_trimmed_reads = FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads
     ch_ht2_file = HISAT2_BUILD.out.index
 
     HISAT2_ALIGN(
-        ch_trimmed_reads,
-        ch_ht2_file.collect(),
-        ch_splicesites.collect()
+        ch_trimmed_reads,           // reads
+        ch_ht2_file.collect(),      // index 
+        ch_splicesites.collect()    // splice sites
     )
     ch_versions = ch_versions.mix(HISAT2_ALIGN.out.versions.first())
     ch_multiqc_files = ch_multiqc_files.mix(HISAT2_ALIGN.out.summary.collect{it[1]})
@@ -139,9 +125,10 @@ workflow LEONIECHRISSI {
     // MODULE: samtools/faidx
     // get correct file format for the reference genome
     // 
+
     SAMTOOLS_FAIDX (
-        ch_fasta,
-        [[],[]],
+        ch_fasta,   // fasta
+        [[],[]],    // fai
         false
     )
     ch_versions = ch_versions.mix(SAMTOOLS_FAIDX.out.versions.first())
@@ -154,14 +141,14 @@ workflow LEONIECHRISSI {
     // prepare for samtools sort
     bam_files = HISAT2_ALIGN.out.bam
     bam_files_sorted = bam_files.map { meta, bam ->
-    meta_new = meta.clone()
-    meta_new.id = "${meta.id}.sorted"
-    tuple(meta_new, bam)
+        //meta_new = meta.clone()
+        meta.id = "${meta.id}.sorted"
+        tuple(meta, bam)
     }
 
     SAMTOOLS_SORT(
-        bam_files_sorted,
-        ch_fasta.collect(),
+        bam_files_sorted,       // bam files
+        ch_fasta.collect(),     // fasta
         []
     )
     ch_versions = ch_versions.mix(SAMTOOLS_SORT.out.versions.first())
@@ -179,9 +166,9 @@ workflow LEONIECHRISSI {
     fai_genome = SAMTOOLS_FAIDX.out.fai
 
     PICARD_MARKDUPLICATES(
-        bam_files_with_prefix,
-        ch_fasta.collect(),
-        fai_genome.collect()
+        bam_files_with_prefix,  // reads
+        ch_fasta.collect(),     // fasta
+        fai_genome.collect()    // fai
     )
    
     ch_versions = ch_versions.mix(PICARD_MARKDUPLICATES.out.versions.first())
@@ -189,6 +176,7 @@ workflow LEONIECHRISSI {
 
     //
     // MODULE: FeatureCounts
+    // get read counts
     //
 
     // prepare for FeatureCounts
@@ -203,11 +191,11 @@ workflow LEONIECHRISSI {
     ch_versions = ch_versions.mix(SUBREAD_FEATURECOUNTS.out.versions.first())
     ch_multiqc_files = ch_multiqc_files.mix(SUBREAD_FEATURECOUNTS.out.summary.collect{it[1]})
 
-   
 
     //
     // MODULE: featurecounts merge
     // merge process
+    //
     
     ch_files = SUBREAD_FEATURECOUNTS.out.counts.collect{it[1]}
     FEATURECOUNTS_MERGE(
@@ -217,6 +205,7 @@ workflow LEONIECHRISSI {
     //
     // Collate and save software versions
     //
+
     softwareVersionsToYAML(ch_versions)
         .collectFile(
             storeDir: "${params.outdir}/pipeline_info",
@@ -228,6 +217,7 @@ workflow LEONIECHRISSI {
     //
     // MODULE: MultiQC
     //
+
     ch_multiqc_config        = Channel.fromPath(
         "$projectDir/assets/multiqc_config.yml", checkIfExists: true)
     ch_multiqc_custom_config = params.multiqc_config ?

@@ -30,7 +30,7 @@
             "strandedness": {
                 "type": "string",
                 "errorMessage": "Strandedness must be provided and be one of 'auto', 'forward', 'reverse' or 'unstranded'",
-                "enum": ["forward", "reverse", "unstranded", "auto"],
+                "enum": ["forward", "reverse", "unstranded"],
                 "meta": ["strandedness"]
             },
             "group": {
