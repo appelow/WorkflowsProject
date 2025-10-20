@@ -7,6 +7,7 @@
 
 <h1>
   <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/nf-core-leoniechrissi.drawio.png">
     <img alt="nf-core/leoniechrissi" src="docs/images/docs/images/nf-core-leoniechrissi.drawio.png">
   </picture>
 </h1>
